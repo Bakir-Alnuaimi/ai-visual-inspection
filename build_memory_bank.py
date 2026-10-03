@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 import torch
@@ -7,8 +8,8 @@ from torchvision import transforms
 from torchvision.models import resnet18, ResNet18_Weights
 from torchvision.models.feature_extraction import create_feature_extractor
 
-DATA_DIR = Path("data/mvtec_ad/bottle/train/good")
-OUT_FILE = Path("memory_bank.pt")
+DATA_ROOT = Path("data/mvtec_ad")
+BANK_DIR = Path("memory_banks")
 IMAGE_SIZE = 224
 BATCH_SIZE = 16
 
@@ -36,9 +37,21 @@ def extract_patch_features(batch: torch.Tensor) -> torch.Tensor:
     return f.permute(0, 2, 3, 1)                           # [N, 28, 28, 384]
 
 
+def bank_path(category: str) -> Path:
+    """Where the memory bank of a category is stored, e.g. memory_banks/bottle.pt"""
+    return BANK_DIR / f"{category}.pt"
+
+
 def main() -> None:
-    paths = sorted(DATA_DIR.glob("*.png"))
-    print(f"Found {len(paths)} good training images")
+    parser = argparse.ArgumentParser(description="Build the memory bank for one MVTec AD category")
+    parser.add_argument("--category", default="bottle", help="e.g. bottle, screw, carpet")
+    args = parser.parse_args()
+
+    data_dir = DATA_ROOT / args.category / "train" / "good"
+    paths = sorted(data_dir.glob("*.png"))
+    if not paths:
+        raise SystemExit(f"No images found in {data_dir} - is the category downloaded?")
+    print(f"[{args.category}] Found {len(paths)} good training images")
 
     all_patches = []
     for i in range(0, len(paths), BATCH_SIZE):
@@ -52,8 +65,10 @@ def main() -> None:
     print(f"Memory bank shape: {tuple(memory_bank.shape)}")
     print(f"Memory bank size : {memory_bank.numel() * 4 / 1024**2:.0f} MB")
 
-    torch.save(memory_bank, OUT_FILE)
-    print(f"Saved: {OUT_FILE}")
+    out_file = bank_path(args.category)
+    out_file.parent.mkdir(exist_ok=True)
+    torch.save(memory_bank, out_file)
+    print(f"Saved: {out_file}")
 
 
 if __name__ == "__main__":
