@@ -1,40 +1,26 @@
+"""Test the model on ALL test images of a category and compute the image AUROC.
+
+Usage:  python evaluate.py --category bottle
+"""
 import argparse
 
 from sklearn.metrics import roc_auc_score
 
-from build_memory_bank import DATA_ROOT
-from inspect_image import anomaly_map, load_memory_bank
+import patchcore
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--category", default="bottle")
+args = parser.parse_args()
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate one MVTec AD category (image AUROC)")
-    parser.add_argument("--category", default="bottle")
-    parser.add_argument("--size", type=int, default=224)
-    args = parser.parse_args()
+bank = patchcore.load_memory_bank(args.category)
+truth, scores = [], []          # truth: 0 = good, 1 = defect   |   scores: what the model says
 
-    memory_bank = load_memory_bank(args.category, args.size)
-    test_dir = DATA_ROOT / args.category / "test"
+for folder in sorted((patchcore.DATA_DIR / args.category / "test").iterdir()):
+    folder_scores = [patchcore.detect(path, bank)[1] for path in sorted(folder.glob("*.png"))]
+    truth += [0 if folder.name == "good" else 1] * len(folder_scores)
+    scores += folder_scores
+    print(f"{folder.name:<20} {len(folder_scores):>3} images   "
+          f"score min {min(folder_scores):.2f}  avg {sum(folder_scores) / len(folder_scores):.2f}  "
+          f"max {max(folder_scores):.2f}")
 
-    labels = []   # 0 = good, 1 = defect (the "truth")
-    scores = []   # what our model says
-
-    print(f"Category: {args.category}, image size: {args.size}px")
-    for class_dir in sorted(test_dir.iterdir()):
-        class_scores = []
-        for image_path in sorted(class_dir.glob("*.png")):
-            _, score = anomaly_map(image_path, memory_bank, args.size)
-            class_scores.append(score)
-            labels.append(0 if class_dir.name == "good" else 1)
-            scores.append(score)
-
-        print(f"{class_dir.name:<20} {len(class_scores):>3} images   "
-              f"score min {min(class_scores):5.2f}   "
-              f"avg {sum(class_scores) / len(class_scores):5.2f}   "
-              f"max {max(class_scores):5.2f}")
-
-    auroc = roc_auc_score(labels, scores)
-    print(f"\nImage AUROC ({args.category}, {args.size}px): {auroc * 100:.1f} %")
-
-
-if __name__ == "__main__":
-    main()
+print(f"\nImage AUROC ({args.category}): {roc_auc_score(truth, scores) * 100:.1f} %")

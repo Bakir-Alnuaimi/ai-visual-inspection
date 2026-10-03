@@ -1,0 +1,9 @@
+# Install PyTorch first (CPU version):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# Then:
+#   pip install -r requirements.txt
+torch
+torchvision
+pillow
+matplotlib
+scikit-learn
