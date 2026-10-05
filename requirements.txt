@@ -7,3 +7,6 @@ torchvision
 pillow
 matplotlib
 scikit-learn
+fastapi
+uvicorn
+python-multipart
