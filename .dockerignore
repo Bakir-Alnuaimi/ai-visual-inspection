@@ -1,0 +1,7 @@
+.venv/
+data/
+memory_banks/
+__pycache__/
+*.png
+docs/
+.git/
