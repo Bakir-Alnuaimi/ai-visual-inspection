@@ -89,6 +89,49 @@ python predict.py data/mvtec_ad/bottle/test/broken_large/000.png --category bott
 python evaluate.py --category bottle
 ```
 
+## Run as a service (REST API + Docker)
+
+The model is also available as a small web service built with **FastAPI**:
+
+| Endpoint | Method | What it does |
+|----------|--------|--------------|
+| `/health`  | GET  | returns `{"status": "ok"}` if the service is running |
+| `/predict?category=bottle` | POST | upload an image, get `{"filename", "category", "anomaly_score"}` |
+| `/docs`    | GET  | interactive test page (generated automatically by FastAPI) |
+
+**Option A – run locally**
+
+```bash
+uvicorn api:app --reload
+# then open http://127.0.0.1:8000/docs
+```
+
+**Option B – run in Docker** (no local Python setup needed)
+
+```bash
+# build the image once (~5 min the first time)
+docker build -t ai-inspection .
+
+# run it - the memory banks are mounted from the host (read-only)
+docker run --rm -p 8000:8000 -v "$(pwd)/memory_banks:/app/memory_banks:ro" ai-inspection
+```
+
+> On Windows Git Bash use: `MSYS_NO_PATHCONV=1 docker run --rm -p 8000:8000 -v "$(pwd -W)/memory_banks:/app/memory_banks:ro" ai-inspection`
+
+Example request with `curl`:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/predict?category=bottle" \
+     -F "file=@data/mvtec_ad/bottle/test/broken_large/000.png"
+# {"filename":"000.png","category":"bottle","anomaly_score":3.75}
+```
+
+Design decisions:
+- The memory banks (several hundred MB) are **not** baked into the image but mounted as a volume,
+  so the image stays smaller and banks can be updated without rebuilding.
+- The pretrained ResNet18 weights are downloaded **at build time**, so the container needs no internet at runtime.
+- Libraries are installed **before** the code is copied, so code changes rebuild in seconds (Docker layer cache).
+
 ## Project structure
 
 ```
@@ -96,6 +139,8 @@ patchcore.py      the model: feature extraction, memory bank, detection
 train.py          build the memory bank for one category
 predict.py        inspect one image, save a heatmap
 evaluate.py       score all test images, compute the AUROC
+api.py            REST API (FastAPI): /health, /predict
+Dockerfile        container image for the API
 requirements.txt  Python dependencies
 ```
 
@@ -103,8 +148,8 @@ requirements.txt  Python dependencies
 
 - [x] Anomaly detection with heatmaps (PatchCore idea, ResNet18, CPU)
 - [x] Evaluation on 3 MVTec AD categories
-- [ ] REST API (FastAPI) – send an image, get score + heatmap
-- [ ] Docker image
+- [x] REST API (FastAPI) – send an image, get the anomaly score
+- [x] Docker image
 - [ ] Simple web demo: upload an image, see the result
 - [ ] CI with GitHub Actions
 
